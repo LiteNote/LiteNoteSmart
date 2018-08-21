@@ -362,7 +362,7 @@ contract BurnableToken is BasicToken {
    * @dev Burns a specific amount of tokens.
    * @param _value The amount of token to be burned.
    */
-  function burn(uint256 _value) public {
+  function burn(uint256 _value) internal {
     _burn(msg.sender, _value);
   }
 
@@ -451,20 +451,20 @@ contract Ownable {
  */
 contract MintableToken is StandardToken, Ownable {
   event Mint(address indexed to, uint256 amount);
-  event MintFinished();
+  //event MintFinished();
 
-  bool public mintingFinished = false;
+  //bool public mintingFinished = false;
 
 
-  modifier canMint() {
-    require(!mintingFinished);
-    _;
-  }
-
-  modifier hasMintPermission() {
-    require(msg.sender == owner);
-    _;
-  }
+//  modifier canMint() {
+//    require(!mintingFinished);
+//    _;
+//  }
+//
+//  modifier hasMintPermission() {
+//    require(msg.sender == owner);
+//    _;
+//  }
 
   /**
    * @dev Function to mint tokens
@@ -476,9 +476,9 @@ contract MintableToken is StandardToken, Ownable {
     address _to,
     uint256 _amount
   )
-    public
-    hasMintPermission
-    canMint
+    internal
+//    hasMintPermission
+//    canMint
     returns (bool)
   {
     totalSupply_ = totalSupply_.add(_amount);
@@ -492,11 +492,11 @@ contract MintableToken is StandardToken, Ownable {
    * @dev Function to stop minting new tokens.
    * @return True if the operation was successful.
    */
-  function finishMinting() public onlyOwner canMint returns (bool) {
-    mintingFinished = true;
-    emit MintFinished();
-    return true;
-  }
+//  function finishMinting() public onlyOwner canMint returns (bool) {
+//    mintingFinished = true;
+//    emit MintFinished();
+//    return true;
+//  }
 }
 
 contract MultisigMintBurn is MintableToken, BurnableToken {
@@ -538,7 +538,7 @@ contract MultisigMintBurn is MintableToken, BurnableToken {
     mapping(bytes32 => Proposal) public proposals;
 
     /**
-     * @dev Campaigns hashes list
+     * @dev Proposals hashes list
      */
     bytes32[] public proposalsHash;
 
@@ -603,7 +603,7 @@ contract MultisigMintBurn is MintableToken, BurnableToken {
     /**
      * @dev On proposal added
      * @param sender Sender address
-     * @param hash Campaign hash
+     * @param hash Proposal hash
      * @param wallet Wallet to send tokens
      * @param amount Amount of tokens in wei
      */
@@ -612,6 +612,29 @@ contract MultisigMintBurn is MintableToken, BurnableToken {
         bytes32 indexed hash,
         address wallet,
         uint256 amount
+    );
+
+    /**
+     * @dev On vote by admin
+     * @param sender Proposal sender
+     * @param hash Proposal hash
+     */
+    event Voted(
+        address indexed sender,
+        bytes32 indexed hash
+    );
+
+    /**
+     * @dev On proposal passed
+     * @param sender Sender address
+     * @param hash Proposal hash
+     * @param owner Owner address
+     * @param description Description
+     * @param link Link to site
+     */
+    event ProposalPassed(
+        address indexed sender,
+        bytes32 indexed hash
     );
 
     /**
@@ -674,11 +697,11 @@ contract MultisigMintBurn is MintableToken, BurnableToken {
     }
 
     /**
-     * @dev Create a new proposal
+     * @dev Create a new mint proposal
      * @param _wallet Beneficiary account addresses
      * @param _amount Amount values in wei
      */
-    function mint(
+    function createMintProposal(
         address _wallet,
         uint256 _amount
     )
@@ -689,11 +712,45 @@ contract MultisigMintBurn is MintableToken, BurnableToken {
         require(_wallet != 0x0);
         require(_amount > 0);
 
+        _createProposal(_wallet, _amount, ProposalType.Mint);
+    }
+
+    /**
+     * @dev Create a new burn proposal
+     * @param _wallet Beneficiary account addresses
+     * @param _amount Amount values in wei
+     */
+    function createBurnProposal(
+        uint256 _amount
+    )
+    public
+    onlyMembers
+    returns (uint256 id)
+    {
+        require(_amount > 0);
+        require(_amount <= balances[msg.sender]);
+
+        _createProposal(msg.sender, _amount, ProposalType.Burn);
+    }
+
+    /**
+     * @dev Proposal passed. Mint or burn tokens
+     * @param _hash Proposal hash
+     * @param _hash Proposal type (mint or burn)
+     */
+    function _createProposal(
+        address _wallet,
+        uint256 _amount,
+        ProposalType type
+    )
+    internal
+    returns (bool)
+    {
         bytes32 _hash = generateHash(_wallet);
 
         proposals[_hash].indexProposal = proposalsHash.push(_hash) - 1;
         proposals[_hash].proposalDate = now;
-        proposals[_hash].type = ProposalType.Mint;
+        proposals[_hash].type = type;
 
         proposals[_hash].creator = msg.sender;
         proposals[_hash].wallet = _wallet;
@@ -704,7 +761,72 @@ contract MultisigMintBurn is MintableToken, BurnableToken {
         proposals[_hash].voted[msg.sender] = true;
         proposals[_hash].votesAddr.push(msg.sender);
 
-        ProposalAdded(msg.sender, _hash, _wallet, _amount);
+        emit ProposalAdded(msg.sender, _hash, _wallet, _amount);
+
+        if (proposals[_hash].numberOfVotes >= minimumQuorum) {
+            proposalPassed(_hash);
+        }
+    }
+
+    /**
+     * @dev Vote for mint proposal
+     * @param _hash Proposal hash
+     */
+    function signMintProposal(
+        bytes32 _hash
+    )
+    public
+    onlyMembers
+    returns (bool)
+    {
+        require(proposals[_hash].proposalDate);
+
+        require(!proposals[_hash].voted[msg.sender]);
+
+        proposals[_hash].voted[msg.sender] = true; // Set this voter as having voted
+        proposals[_hash].votesAddr.push(msg.sender);
+
+        proposals[_hash].numberOfVotes++; // Increase the number of votes
+
+        // Create a log of this event
+        emit Voted(msg.sender, _hash,  _supportsProposal, _comment);
+
+        if (proposals[_hash].numberOfVotes >= minimumQuorum) {
+            proposalPassed(_hash);
+        }
+
+        return true;
+    }
+
+    /**
+     * @dev Proposal passed. Mint or burn tokens
+     * @param _hash Proposal hash
+     * @param _hash Proposal type (mint or burn)
+     */
+    function proposalPassed(
+        bytes32 _hash
+    )
+    internal
+    returns (bool)
+    {
+        // Proposal passed; remove from proposalsHash and send tokens
+        uint rowToDelete = proposals[_hash].indexProposal;
+        address keyToMove   = proposalsHash[proposalsHash.length-1];
+        proposalsHash[rowToDelete] = keyToMove;
+        proposals[keyToMove].indexProposal = rowToDelete;
+        proposalsHash.length--;
+
+        proposals[_hash].indexProposal = 0;
+
+        ProposalPassed(msg.sender, _hash);
+
+        if (proposals[_hash].type == ProposalType.Mint) {
+            return mint(proposals[_hash].wallet, proposals[_hash].amount);
+        }
+
+        if (proposals[_hash].type == ProposalType.Burn) {
+            return _burn(proposals[_hash].wallet, proposals[_hash].amount);
+        }
     }
 }
 
