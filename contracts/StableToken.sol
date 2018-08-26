@@ -390,7 +390,7 @@ contract Ownable {
     address public owner;
 
 
-    event OwnershipRenounced(address indexed previousOwner);
+    //event OwnershipRenounced(address indexed previousOwner);
     event OwnershipTransferred(
         address indexed previousOwner,
         address indexed newOwner
@@ -419,10 +419,10 @@ contract Ownable {
      * It will not be possible to call the functions with the `onlyOwner`
      * modifier anymore.
      */
-    function renounceOwnership() public onlyOwner {
-        emit OwnershipRenounced(owner);
-        owner = address(0);
-    }
+//    function renounceOwnership() public onlyOwner {
+//        emit OwnershipRenounced(owner);
+//        owner = address(0);
+//    }
 
     /**
      * @dev Allows the current owner to transfer control of the contract to a newOwner.
@@ -511,14 +511,13 @@ contract MultisigMintBurn is MintableToken, BurnableToken {
     struct Admin {
         address admin;
         bool active;
-        uint256 memberSince;
         uint index;
     }
 
     /**
      * @dev Get delegate object by account address
      */
-    mapping(address => Admin) admins;
+    mapping(address => Admin) public admins;
 
     /**
      * @dev Congress members addresses list
@@ -550,6 +549,14 @@ contract MultisigMintBurn is MintableToken, BurnableToken {
         return proposalsHash.length;
     }
 
+    function getProposalVotesAddr(bytes32 _hash, uint256 _i) public view returns (address) {
+        return proposals[_hash].votesAddr[_i];
+    }
+
+    function getProposalVoted(bytes32 _hash, address _address) public view returns (bool) {
+        return proposals[_hash].voted[_address];
+    }
+
     enum ProposalType { Mint, Burn }
 
     struct Proposal {
@@ -560,6 +567,7 @@ contract MultisigMintBurn is MintableToken, BurnableToken {
         address creator;
         address wallet;
         uint256 amount;
+        bool passed;
 
         uint256 numberOfVotes;
 
@@ -659,6 +667,7 @@ contract MultisigMintBurn is MintableToken, BurnableToken {
         require(admins[_admin].active);
 
         admins[_admin].active = false;
+        admins[_admin].index = 0;
 
         uint rowToDelete = admins[_admin].index;
         address keyToMove   = adminsAddr[adminsAddr.length-1];
@@ -749,6 +758,7 @@ contract MultisigMintBurn is MintableToken, BurnableToken {
         proposals[_hash].creator = msg.sender;
         proposals[_hash].wallet = _wallet;
         proposals[_hash].amount = _amount;
+        proposals[_hash].passed = false;
 
         proposals[_hash].numberOfVotes = 1;
 
@@ -773,7 +783,39 @@ contract MultisigMintBurn is MintableToken, BurnableToken {
     onlyAdmins
     returns (bool)
     {
-        require(proposals[_hash].proposalDate > 0);
+        require(!proposals[_hash].passed);
+        require(proposals[_hash].proposalType == ProposalType.Mint);
+
+        require(!proposals[_hash].voted[msg.sender]);
+
+        proposals[_hash].voted[msg.sender] = true; // Set this voter as having voted
+        proposals[_hash].votesAddr.push(msg.sender);
+
+        proposals[_hash].numberOfVotes++; // Increase the number of votes
+
+        // Create a log of this event
+        emit Voted(msg.sender, _hash);
+
+        if (proposals[_hash].numberOfVotes >= minimumQuorum) {
+            proposalPassed(_hash);
+        }
+
+        return true;
+    }
+
+    /**
+     * @dev Vote for mint proposal
+     * @param _hash Proposal hash
+     */
+    function signBurnProposal(
+        bytes32 _hash
+    )
+    public
+    onlyAdmins
+    returns (bool)
+    {
+        require(!proposals[_hash].passed);
+        require(proposals[_hash].proposalType == ProposalType.Burn);
 
         require(!proposals[_hash].voted[msg.sender]);
 
@@ -811,6 +853,7 @@ contract MultisigMintBurn is MintableToken, BurnableToken {
         proposalsHash.length--;
 
         proposals[_hash].indexProposal = 0;
+        proposals[_hash].passed = true;
 
         emit ProposalPassed(msg.sender, _hash);
 
@@ -833,6 +876,6 @@ contract StableToken is MultisigMintBurn, ERC223 {
     uint public decimals = 18;
 
     constructor() public {
-        owner = msg.sender;
+        minimumQuorum = 1;
     }
 }
