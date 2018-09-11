@@ -9,6 +9,8 @@ contract('StableToken test', async (accounts) => {
     let recipient1 = accounts[4];
     let recipient2 = accounts[5];
 
+    let _burnAddr = owner;
+
     let tokenInstance;
 
     let _tmpProposalHash;
@@ -31,6 +33,8 @@ contract('StableToken test', async (accounts) => {
         let numAdmins = await tokenInstance.numAdmins();
         let numProposals = await tokenInstance.numProposals();
 
+        let burnAddress = await tokenInstance.burnAddress();
+
         assert.equal(owner, owner);
         assert.equal(name, "Stable token");
         assert.equal(symbol, "STT");
@@ -39,6 +43,7 @@ contract('StableToken test', async (accounts) => {
         assert.equal(minimumQuorum, 1);
         assert.equal(numAdmins, 0);
         assert.equal(numProposals, 0);
+        assert.equal(burnAddress, _burnAddr);
     });
 
     it("should not mint token from non admin account", async () => {
@@ -88,7 +93,7 @@ contract('StableToken test', async (accounts) => {
         assert.equal(totalSupply, 1000);
     });
 
-    it("should not burn tokens with zero admin balance", async () => {
+    it("should not burn tokens with zero balance", async () => {
         let error1;
         let error2;
 
@@ -108,33 +113,54 @@ contract('StableToken test', async (accounts) => {
         assert.isDefined(error1);
     });
 
-    it("should mint token with first admin for admin", async () => {
-        await tokenInstance.createMintProposal(admin1, 2000, {from: admin1});
-
-        let balance = await tokenInstance.balanceOf(admin1);
-        assert.equal(balance.valueOf(), 2000);
-
-        let totalSupply = await tokenInstance.totalSupply();
-        assert.equal(totalSupply, 3000);
-    });
-
-    it("should burn tokens from first admin", async () => {
+    it("should not mint token with first admin for admin", async () => {
         let error1;
 
-        await tokenInstance.createBurnProposal(300, {from: admin1});
+        try {
+            await tokenInstance.createMintProposal(admin1, 2000, {from: admin1});
+        } catch (e) {
+            error1 = e;
+        }
+        assert.isDefined(error1);
+
+        let balance = await tokenInstance.balanceOf(admin1);
+        assert.equal(balance.valueOf(), 0);
+
+        let totalSupply = await tokenInstance.totalSupply();
+        assert.equal(totalSupply, 1000);
+    });
+
+    it("should transfer token to burn address", async () => {
+        await tokenInstance.transfer(_burnAddr, 300, {from: recipient1});
+
+        let balance = await tokenInstance.balanceOf(_burnAddr);
+        assert.equal(balance.valueOf(), 300);
+
+        let balanceRecipient = await tokenInstance.balanceOf(recipient1);
+        assert.equal(balanceRecipient.valueOf(), 700);
+
+        let totalSupply = await tokenInstance.totalSupply();
+        assert.equal(totalSupply, 1000);
+    });
+
+    it("first admin should burn tokens", async () => {
+        let error1;
+
+        await tokenInstance.createBurnProposal(100, {from: admin1});
 
         try {
             let proposalHash = await tokenInstance.proposalsHash(0);
         } catch (e) {
+            //console.log("ERRRRRR", e);
             error1 = e;
         }
-        let balance = await tokenInstance.balanceOf(admin1);
+        let balance = await tokenInstance.balanceOf(_burnAddr);
 
         assert.isDefined(error1);
-        assert.equal(balance.valueOf(), 1700);
+        assert.equal(balance.valueOf(), 200);
 
         let totalSupply = await tokenInstance.totalSupply();
-        assert.equal(totalSupply, 2700);
+        assert.equal(totalSupply, 900);
     });
 
     it("should change voting rules", async () => {
@@ -251,7 +277,7 @@ contract('StableToken test', async (accounts) => {
         assert.equal(balanceRecipient.valueOf(), 500);
 
         let totalSupply = await tokenInstance.totalSupply();
-        assert.equal(totalSupply, 3200);
+        assert.equal(totalSupply.valueOf(), 1400);
     });
 
     it("should not sign proposal from second admin again", async () => {
@@ -293,13 +319,13 @@ contract('StableToken test', async (accounts) => {
     });
 
     it("should create proposal for burn from first admin", async () => {
-        await tokenInstance.createBurnProposal(400, {from: admin1});
+        await tokenInstance.createBurnProposal(50, {from: admin1});
 
         let balance = await tokenInstance.balanceOf(admin1);
-        assert.equal(balance.valueOf(), 1700);
+        assert.equal(balance.valueOf(), 0);
 
         let totalSupply = await tokenInstance.totalSupply();
-        assert.equal(totalSupply, 3200);
+        assert.equal(totalSupply, 1400);
 
         let proposalHash = await tokenInstance.proposalsHash(0);
 
@@ -308,8 +334,8 @@ contract('StableToken test', async (accounts) => {
         assert.equal(proposal[0].valueOf(), 0);
         assert.equal(proposal[2].valueOf(), 1);
         assert.equal(proposal[3], admin1);
-        assert.equal(proposal[4], admin1);
-        assert.equal(proposal[5].valueOf(), 400);
+        assert.equal(proposal[4], _burnAddr);
+        assert.equal(proposal[5].valueOf(), 50);
         assert.equal(proposal[6], false);
         assert.equal(proposal[7].valueOf(), 1);
 
@@ -357,8 +383,8 @@ contract('StableToken test', async (accounts) => {
         assert.equal(proposal[0].valueOf(), 0);
         assert.equal(proposal[2].valueOf(), 1);
         assert.equal(proposal[3], admin1);
-        assert.equal(proposal[4], admin1);
-        assert.equal(proposal[5].valueOf(), 400);
+        assert.equal(proposal[4], _burnAddr);
+        assert.equal(proposal[5].valueOf(), 50);
         assert.equal(proposal[6], true);
         assert.equal(proposal[7].valueOf(), 2);
 
@@ -371,10 +397,10 @@ contract('StableToken test', async (accounts) => {
         assert.equal(proposalVoted2, false);
 
         let balance = await tokenInstance.balanceOf(admin1);
-        assert.equal(balance.valueOf(), 1300);
+        assert.equal(balance.valueOf(), 0);
 
         let totalSupply = await tokenInstance.totalSupply();
-        assert.equal(totalSupply, 2800);
+        assert.equal(totalSupply, 1350);
     });
 
     it("should not sign proposal from third admin again", async () => {
@@ -451,29 +477,36 @@ contract('StableToken test', async (accounts) => {
     });
 
     it("should transfer tokens", async () => {
-        await tokenInstance.transfer(recipient2, 200, {from: admin1});
-
-        let balance1 = await tokenInstance.balanceOf(admin1);
-        assert.equal(balance1.valueOf(), 1100);
-
-        let balance2 = await tokenInstance.balanceOf(recipient2);
-        assert.equal(balance2.valueOf(), 700);
-
-        let totalSupply = await tokenInstance.totalSupply();
-        assert.equal(totalSupply, 2800);
-    });
-
-    it("should transfer tokens", async () => {
         await tokenInstance.transfer(recipient1, 300, {from: recipient2});
 
         let balance1 = await tokenInstance.balanceOf(recipient1);
-        assert.equal(balance1.valueOf(), 1300);
+        assert.equal(balance1.valueOf(), 1000);
 
         let balance2 = await tokenInstance.balanceOf(recipient2);
-        assert.equal(balance2.valueOf(), 400);
+        assert.equal(balance2.valueOf(), 200);
 
         let totalSupply = await tokenInstance.totalSupply();
-        assert.equal(totalSupply, 2800);
+        assert.equal(totalSupply.valueOf(), 1350);
+    });
+
+    it("should not transfer tokens to admin", async () => {
+        let error1;
+        try {
+            await tokenInstance.transfer(admin1, {from: recipient1});
+        } catch (e) {
+            error1 = e;
+        }
+
+        assert.isDefined(error1);
+
+        let balance1 = await tokenInstance.balanceOf(recipient1);
+        assert.equal(balance1.valueOf(), 1000);
+
+        let balance2 = await tokenInstance.balanceOf(admin1);
+        assert.equal(balance2.valueOf(), 0);
+
+        let totalSupply = await tokenInstance.totalSupply();
+        assert.equal(totalSupply.valueOf(), 1350);
     });
 
     // it("should send tokens", async () => {

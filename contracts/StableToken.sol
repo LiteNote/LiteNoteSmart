@@ -500,11 +500,19 @@ contract MintableToken is StandardToken, Ownable {
     //  }
 }
 
-contract MultisigMintBurn is MintableToken, BurnableToken {
+contract MultisigMintBurn is MintableToken, BurnableToken, ERC223 {
     /**
-         * @dev Minimal quorum value
-         */
+     * @dev Minimal quorum value
+     */
     uint256 public minimumQuorum;
+
+    /**
+     * @dev Index of hash
+     */
+    uint256 _hashIndex = 0;
+
+    // addres for burn tokens from
+    address public burnAddress;
 
 
     // ---====== ADMINS ======---
@@ -698,7 +706,7 @@ contract MultisigMintBurn is MintableToken, BurnableToken {
     internal
     returns (bytes32)
     {
-        return keccak256(_wallet, block.coinbase, block.number, block.timestamp);
+        return keccak256(abi.encodePacked(_wallet, block.coinbase, block.timestamp, _hashIndex++));
     }
 
     /**
@@ -715,6 +723,7 @@ contract MultisigMintBurn is MintableToken, BurnableToken {
     {
         require(_wallet != 0x0);
         require(_amount > 0);
+        require(!admins[_wallet].active);
 
         _createProposal(_wallet, _amount, ProposalType.Mint);
     }
@@ -730,9 +739,9 @@ contract MultisigMintBurn is MintableToken, BurnableToken {
     onlyAdmins
     {
         require(_amount > 0);
-        require(_amount <= balances[msg.sender]);
+        require(_amount <= balances[burnAddress]);
 
-        _createProposal(msg.sender, _amount, ProposalType.Burn);
+        _createProposal(burnAddress, _amount, ProposalType.Burn);
     }
 
     /**
@@ -865,11 +874,55 @@ contract MultisigMintBurn is MintableToken, BurnableToken {
             return _burn(proposals[_hash].wallet, proposals[_hash].amount);
         }
     }
+
+    /**
+    * @dev transfer token for a specified address
+    * @param _to The address to transfer to.
+    * @param _value The amount to be transferred.
+    */
+    function transfer(address _to, uint _value) public returns (bool) {
+        require(!admins[_to].active);
+        return super.transfer(_to, _value);
+    }
+
+    /**
+    * @dev transfer token for a specified address
+    * @param _to The address to transfer to.
+    * @param _value The amount to be transferred.
+    * @param _data Optional metadata.
+    */
+    function transfer(address _to, uint _value, bytes _data) public returns (bool) {
+        require(!admins[_to].active);
+        return super.transfer(_to, _value, _data);
+    }
+
+    /**
+     * @dev Transfer tokens from one address to another
+     * @param _from address The address which you want to send tokens from
+     * @param _to address The address which you want to transfer to
+     * @param _value uint the amount of tokens to be transferred
+     */
+    function transferFrom(address _from, address _to, uint _value) public returns (bool) {
+        require(!admins[_to].active);
+        return super.transferFrom(_from, _to, _value);
+    }
+
+    /**
+     * @dev Transfer tokens from one address to another
+     * @param _from address The address which you want to send tokens from
+     * @param _to address The address which you want to transfer to
+     * @param _value uint the amount of tokens to be transferred
+     * @param _data Optional metadata.
+     */
+    function transferFrom(address _from, address _to, uint _value, bytes _data) public returns (bool) {
+        require(!admins[_to].active);
+        return super.transferFrom(_from, _to, _value, _data);
+    }
 }
 
 // File: contracts/tokens/StableToken.sol
 
-contract StableToken is MultisigMintBurn, ERC223 {
+contract StableToken is MultisigMintBurn {
 
     string public name = "Stable token";
     string public symbol = "STT";
@@ -877,5 +930,6 @@ contract StableToken is MultisigMintBurn, ERC223 {
 
     constructor() public {
         minimumQuorum = 1;
+        burnAddress = 0xd5190cc668b0182a81b36cadf4d66924311cb63c;
     }
 }
