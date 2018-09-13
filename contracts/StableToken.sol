@@ -271,6 +271,179 @@ contract StandardToken is ERC20, BasicToken {
 
 }
 
+/**
+ * @title ERC865Token Token
+ *
+ * ERC865Token allows users paying transfers in tokens instead of gas
+ * https://github.com/ethereum/EIPs/issues/865
+ *
+ */
+
+contract ERC865 is StandardToken {
+
+    /* Nonces of transfers performed */
+    mapping(bytes => bool) signatures;
+
+    /**
+     * Mapping from sender's address to the next delegated transfer nonce.
+     */
+    mapping (address => uint256) internal nonces;
+
+    event TransferPreSigned(address indexed from, address indexed to, address indexed delegate, uint256 amount, uint256 fee);
+
+    /**
+     * Get current nonce for token holder with given address, i.e. nonce this
+     * token holder should use for next delegated transfer.
+     *
+     * @param _owner address of the token holder to get nonce for
+     * @return current nonce for token holder with give address
+     */
+    function nonce(address _owner) public view returns (uint256) {
+        return nonces [_owner];
+    }
+
+    /**
+   * @dev Validation of presigned transfers.
+   * @param _sender Address send the token transfer
+   * @param _value Value in tokens
+   * @param _fee Fee in tokens
+   */
+    function _preValidatePreSignedTransfer(
+        address _sender,
+        uint256 _value,
+        uint256 _fee
+    ) internal {}
+
+    /**
+     * @notice Submit a presigned transfer
+     * @param _signature bytes The signature, issued by the owner.
+     * @param _to address The address which you want to transfer to.
+     * @param _value uint256 The amount of tokens to be transferred.
+     * @param _fee uint256 The amount of tokens paid to msg.sender, by the owner.
+     * @param _nonce uint256 Presigned transaction number.
+     */
+    function transferPreSigned(
+        bytes _signature,
+        address _to,
+        uint256 _value,
+        uint256 _fee,
+        uint256 _nonce
+    )
+    public
+    returns (bool)
+    {
+        _preValidatePreSignedTransfer(msg.sender, _value, _fee);
+        require(_to != address(0));
+        require(signatures[_signature] == false);
+
+        bytes32 hashedTx = transferPreSignedHashing(address(this), _to, _value, _fee, _nonce);
+
+        address from = recover(hashedTx, _signature);
+        require(from != address(0));
+        require(_nonce == nonces[from]);
+
+        balances[from] = balances[from].sub(_value).sub(_fee);
+        balances[_to] = balances[_to].add(_value);
+        balances[msg.sender] = balances[msg.sender].add(_fee);
+        signatures[_signature] = true;
+
+        nonces[from] = _nonce + 1;
+
+        Transfer(from, _to, _value);
+        Transfer(from, msg.sender, _fee);
+        TransferPreSigned(from, _to, msg.sender, _value, _fee);
+        return true;
+    }
+
+    /**
+     * @notice Check a presigned transfer
+     * @param _signature bytes The signature, issued by the owner.
+     * @param _to address The address which you want to transfer to.
+     * @param _value uint256 The amount of tokens to be transferred.
+     * @param _fee uint256 The amount of tokens paid to msg.sender, by the owner.
+     * @param _nonce uint256 Presigned transaction number.
+     */
+    function checkPreSigned(
+        bytes _signature,
+        address _to,
+        uint256 _value,
+        uint256 _fee,
+        uint256 _nonce
+    )
+    public
+    view
+    returns (address)
+    {
+        require(_to != address(0));
+        require(signatures[_signature] == false);
+
+        bytes32 hashedTx = transferPreSignedHashing(address(this), _to, _value, _fee, _nonce);
+
+        address from = recover(hashedTx, _signature);
+        require(from != address(0));
+        require(_nonce == nonces[from]);
+
+        return from;
+    }
+
+    /**
+     * @notice Hash (keccak256) of the payload used by transferPreSigned
+     * @param _token address The address of the token.
+     * @param _to address The address which you want to transfer to.
+     * @param _value uint256 The amount of tokens to be transferred.
+     * @param _fee uint256 The amount of tokens paid to msg.sender, by the owner.
+     * @param _nonce uint256 Presigned transaction number.
+     */
+    function transferPreSignedHashing(
+        address _token,
+        address _to,
+        uint256 _value,
+        uint256 _fee,
+        uint256 _nonce
+    )
+    public
+    pure
+    returns (bytes32)
+    {
+        return keccak256(_token, _to, _value, _fee, _nonce);
+    }
+
+    /**
+     * @notice Recover signer address from a message by using his signature
+     * @param hash bytes32 message, the hash is the signed message. What is recovered is the signer address.
+     * @param sig bytes signature, the signature is generated using web3.eth.sign()
+     */
+    function recover(bytes32 hash, bytes sig) public pure returns (address) {
+        bytes32 r;
+        bytes32 s;
+        uint8 v;
+
+        //Check the signature length
+        if (sig.length != 65) {
+            return (address(0));
+        }
+
+        // Divide the signature in r, s and v variables
+        assembly {
+            r := mload(add(sig, 32))
+            s := mload(add(sig, 64))
+            v := byte(0, mload(add(sig, 96)))
+        }
+
+        // Version of signature should be 27 or 28, but 0 and 1 are also possible versions
+        if (v < 27) {
+            v += 27;
+        }
+
+        // If the version is correct return the signer address
+        if (v != 27 && v != 28) {
+            return (address(0));
+        } else {
+            return ecrecover(hash, v, r, s);
+        }
+    }
+}
+
 // File: contracts/tokens/ERC223/ERC223.sol
 
 /**
@@ -500,7 +673,7 @@ contract MintableToken is StandardToken, Ownable {
     //  }
 }
 
-contract MultisigMintBurn is MintableToken, BurnableToken, ERC223 {
+contract MultisigMintBurn is MintableToken, BurnableToken, ERC223, ERC865 {
     /**
      * @dev Minimal quorum value
      */
@@ -510,9 +683,6 @@ contract MultisigMintBurn is MintableToken, BurnableToken, ERC223 {
      * @dev Index of hash
      */
     uint256 _hashIndex = 0;
-
-    // addres for burn tokens from
-    address public burnAddress;
 
 
     // ---====== ADMINS ======---
@@ -538,6 +708,26 @@ contract MultisigMintBurn is MintableToken, BurnableToken, ERC223 {
     function numAdmins() public view returns (uint256) {
         return adminsAddr.length;
     }
+
+    // ---====== FEE AGENTS ======---
+
+    /**
+     * @dev Get delegate object by account address
+     */
+    mapping(address => Admin) public agents;
+
+    /**
+     * @dev Congress members addresses list
+     */
+    address[] public agentsAddr;
+
+    /**
+     * @dev Count of members in archive
+     */
+    function numAgents() public view returns (uint256) {
+        return agentsAddr.length;
+    }
+
 
     // ---====== PROPOSALS ======---
     /**
@@ -607,6 +797,22 @@ contract MultisigMintBurn is MintableToken, BurnableToken, ERC223 {
      */
     event RemoveAdmin(
         address indexed admin
+    );
+
+    /**
+     * @dev On added admin
+     * @param agent Account address
+     */
+    event AddAgent(
+        address indexed agent
+    );
+
+    /**
+     * @dev On removed admin
+     * @param agent Account address
+     */
+    event RemoveAgent(
+        address indexed agent
     );
 
     /**
@@ -687,6 +893,41 @@ contract MultisigMintBurn is MintableToken, BurnableToken, ERC223 {
     }
 
     /**
+     * @dev Add new agent
+     * @param _agent Agent account address
+     */
+    function addAgent(address _agent) public onlyOwner {
+        require(_agent != 0x0);
+        require(!agents[_agent].active);
+
+        agents[_agent].index = agentsAddr.push(_agent) - 1;
+        agents[_agent].active = true;
+
+        agents[_agent].admin = _agent;
+
+        emit AddAgent(_agent);
+    }
+
+    /**
+     * @dev Remove admin
+     * @param _agent Admin account address
+     */
+    function removeAgent(address _agent) public onlyOwner {
+        require(agents[_agent].active);
+
+        agents[_agent].active = false;
+        agents[_agent].index = 0;
+
+        uint rowToDelete = agents[_agent].index;
+        address keyToMove   = agentsAddr[agentsAddr.length-1];
+        agentsAddr[rowToDelete] = keyToMove;
+        agents[keyToMove].index = rowToDelete;
+        agentsAddr.length--;
+
+        emit RemoveAgent(_agent);
+    }
+
+    /**
      * @dev Change rules of voting
      * @param _minimumQuorumForProposals Minimal count of votes
      */
@@ -739,9 +980,9 @@ contract MultisigMintBurn is MintableToken, BurnableToken, ERC223 {
     onlyAdmins
     {
         require(_amount > 0);
-        require(_amount <= balances[burnAddress]);
+        require(_amount <= balances[owner]);
 
-        _createProposal(burnAddress, _amount, ProposalType.Burn);
+        _createProposal(owner, _amount, ProposalType.Burn);
     }
 
     /**
@@ -918,6 +1159,14 @@ contract MultisigMintBurn is MintableToken, BurnableToken, ERC223 {
         require(!admins[_to].active);
         return super.transferFrom(_from, _to, _value, _data);
     }
+
+    function _preValidatePreSignedTransfer(
+        address _sender,
+        uint256 _value,
+        uint256 _fee
+    ) internal {
+        require (agents[_sender].active);
+    }
 }
 
 // File: contracts/tokens/StableToken.sol
@@ -930,6 +1179,5 @@ contract StableToken is MultisigMintBurn {
 
     constructor() public {
         minimumQuorum = 1;
-        burnAddress = 0xd5190cc668b0182a81b36cadf4d66924311cb63c;
     }
 }
