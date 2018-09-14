@@ -6,142 +6,61 @@
 </head>
 <body>
 
-Private key: <input type="text" id="private" value="0xE9F6B170D1A725B0E7B4C26E1F4BE3AE49B39F614F4205757E46D0C9013B6CEA"><br>
-Token: <input type="text" id="token" value="0xef55bfac4228981e850936aaf042951f7b146e41"><br>
+Private key: <input type="text" id="private" value="E9F6B170D1A725B0E7B4C26E1F4BE3AE49B39F614F4205757E46D0C9013B6CEA"><br>
+Token: <input type="text" id="token" value="0x82051cE4f9798E4d5548558BD122B7adff283472"><br>
 To: <input type="text" id="to" value="0x0851Ee225Df973850ebcE3188A7CAa38BF698572"><br>
-Value: <input type="text" id="value" value="100"><br>
-Fee: <input type="text" id="fee" value="1"><br>
+Value: <input type="text" id="amount" value="300"><br>
+Fee: <input type="text" id="fee" value="10"><br>
 Nonce: <input type="text" id="nonce" value="0"><br>
 <input type="button" value="Get" id="get">
 
 <br><br><br>
 Hash: <span id="hash"></span><br>
 Signature: <span id="signature"></span><br>
-SignatureHash: <span id="signatureHash"></span><br>
-Recover1: <span id="recover1"></span><br>
-Recover2: <span id="recover2"></span><br>
 
 
-<script src="web3.min.js"></script>
 <script src="ethUtil.js"></script>
 <script src="buffer.js"></script>
 
 <script type="text/javascript">
-    var web3 =  new Web3();
 
     var private = document.getElementById('private');
     var token = document.getElementById('token');
     var to = document.getElementById('to');
-    var value = document.getElementById('value');
+    var amount = document.getElementById('amount');
     var fee = document.getElementById('fee');
     var nonce = document.getElementById('nonce');
 
     var hash = document.getElementById('hash');
     var signature = document.getElementById('signature');
-    var signatureHash = document.getElementById('signatureHash');
-    var recover1 = document.getElementById('recover1');
-    var recover2 = document.getElementById('recover2');
 
-
-    const bufferedAddress = (address) => {
+    const formattedAddress = (address) => {
         return  Buffer.Buffer.from(ethUtil.stripHexPrefix(address), 'hex');
     };
 
-
-    var messageHash = web3.utils.soliditySha3(to.value);
-    hash.innerHTML = messageHash;
-
-    var messageSignature = web3.eth.accounts.sign(bufferedAddress(to.value), private.value);
-    console.log("SIGN", messageSignature);
-
-    signature.innerHTML = messageSignature.signature;
-    signatureHash.innerHTML = messageSignature.messageHash;
-
-    recover1.innerText = web3.eth.accounts.recover(messageSignature.message, messageSignature.signature);
-    recover2.innerText = web3.eth.accounts.recover(to.value, messageSignature.signature);
-
-    document.getElementById('get').onclick = function() {
-
-        // var messageHash = web3.utils.soliditySha3(token.value, to.value, value.value, fee.value, nonce.value);
-        // hash.innerHTML = messageHash;
-        // var messageSignature = web3.eth.accounts.sign(messageHash, private.value);
-        // var messageSignature2 = web3.eth.accounts.sign(token.value + to.value + web3.utils.utf8ToHex(value.value) + web3.utils.utf8ToHex(fee.value) + web3.utils.utf8ToHex(nonce.value), private.value);
-        // signature.innerHTML = messageSignature2.signature;
-        //
-        // console.log("HASH", messageHash);
-        // console.log("SIGN", messageSignature);
-        // console.log("SIGN2", messageSignature2);
-        //
-        // const bufferedAddress = (address) => {
-        //     return  Buffer.Buffer.from(ethUtil.stripHexPrefix(address), 'hex');
-        // };
-        // const bufferedInt = (int) => {
-        //     return ethUtil.setLengthLeft(int, 32);
-        // };
-        // const formattedByte32 = (bytes) => {
-        //     return ethUtil.addHexPrefix(bytes.toString('hex'));
-        // };
-        //
-        // const components = [
-        //     bufferedAddress(token.value),
-        //     bufferedAddress(to.value),
-        //     bufferedInt(value.value),
-        //     bufferedInt(fee.value),
-        //     bufferedInt(nonce.value)
-        // ];
-        //
-        // const tightPack = Buffer.Buffer.concat(components);
-        //
-        // const hashedTightPack = ethUtil.sha3(tightPack);
-        //
-        // const privateKey = Buffer.Buffer.from(private.value, 'hex');
-        // const vrs = ethUtil.ecsign(hashedTightPack, privateKey);
-        // const sig = ethUtil.toRpcSig(vrs.v, vrs.r, vrs.s);
-        //
-        //
-        // console.log("TTT", Buffer.Buffer.from(tightPack, 'hex'));
-        // console.log("tightPack", tightPack);
-        // console.log("hashedTightPack", hashedTightPack);
-        // console.log("VRS", vrs);
-        // console.log("SIG", sig);
-        // console.log("SIG2", web3.eth.accounts.sign(tightPack, private.value));
+    const formattedInt = (int) => {
+        return ethUtil.setLengthLeft(int, 32);
     };
 
-    // const formattedAddress = (address) => {
-    //     return  Buffer.Buffer.from(ethUtil.stripHexPrefix(address), 'hex');
-    // };
-    //
-    // const formattedInt = (int) => {
-    //     return ethUtil.setLengthLeft(int, 32);
-    // };
-    //
-    // const nonce_ = 32;
-    // const token_ = "0xef55bfac4228981e850936aaf042951f7b146e41";
-    // const to_ = "0x0851Ee225Df973850ebcE3188A7CAa38BF698572";
-    // const amount_ = 100;
-    // const fee_ = 1;
-    // const alicePrivateKey = Buffer.Buffer.from('c87509a1c067bbde78beb793e6fa76530b6382a4c0241e5e4a9ec0a0f44dc0d3', 'hex');
-    //
-    // const components = [
-    //     formattedAddress(token_),
-    //     formattedAddress(to_),
-    //     formattedInt(amount_),
-    //     formattedInt(fee_),
-    //     formattedInt(nonce_)
-    // ];
-    //
-    // const tightPack = Buffer.Buffer.concat(components);
-    //
-    // const hashedTightPack = ethUtil.sha3(tightPack);
-    //
-    // const vrs = ethUtil.ecsign(hashedTightPack, alicePrivateKey);
-    // const sig = ethUtil.toRpcSig(vrs.v, vrs.r, vrs.s);
-    //
-    // console.log("tightPack", tightPack.toString());
-    // console.log("hashedTightPack", hashedTightPack.toString());
-    //
-    // console.log("VRS", vrs);
-    // console.log("SIG", sig);
+    document.getElementById('get').onclick = function() {
+        const components = [
+            formattedAddress(token.value),
+            formattedAddress(to.value),
+            formattedInt(parseInt(amount.value)),
+            formattedInt(parseInt(fee.value)),
+            formattedInt(parseInt(nonce.value))
+        ];
+
+        const tightPack = Buffer.Buffer.concat(components);
+
+        const hashedTightPack = ethUtil.sha3(tightPack);
+
+        const vrs = ethUtil.ecsign(hashedTightPack, Buffer.Buffer.from(private.value, 'hex'));
+        const sig = ethUtil.toRpcSig(vrs.v, vrs.r, vrs.s);
+
+        hash.innerHTML = ethUtil.bufferToHex(hashedTightPack);
+        signature.innerHTML = sig;
+    };
 
 </script>
 

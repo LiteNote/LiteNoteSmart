@@ -1,11 +1,11 @@
 const ethUtil = require("ethereumjs-util");
 
 const privateKey = 'E9F6B170D1A725B0E7B4C26E1F4BE3AE49B39F614F4205757E46D0C9013B6CEA';
-const token = "0xbbf289d846208c16edc8474705c748aff07732db";
+const token = "0xdc04977a2078c8ffdf086d618d1f961b6c546222";
 const to = "0x0851Ee225Df973850ebcE3188A7CAa38BF698572";
-const amount = 30;
-const fee = 0;
-const nonce = 2;
+const amount = 300;
+const fee = 10;
+const nonce = 0;
 
 const formattedAddress = (address) => {
     return  Buffer.from(ethUtil.stripHexPrefix(address), 'hex');
