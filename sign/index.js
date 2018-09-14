@@ -1,10 +1,10 @@
 const ethUtil = require("ethereumjs-util");
 
-const privateKey = 'E9F6B170D1A725B0E7B4C26E1F4BE3AE49B39F614F4205757E46D0C9013B6CEA';
-const token = "0xdc04977a2078c8ffdf086d618d1f961b6c546222";
+const privateKey = 'E9F6B...';
+const token = "0x82051cE4f9798E4d5548558BD122B7adff283472";
 const to = "0x0851Ee225Df973850ebcE3188A7CAa38BF698572";
-const amount = 300;
-const fee = 10;
+const amount = 300000000000000000000;
+const fee = 10000000000000000000;
 const nonce = 0;
 
 const formattedAddress = (address) => {
