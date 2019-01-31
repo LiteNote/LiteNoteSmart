@@ -341,6 +341,7 @@ contract ERC865 is StandardToken {
         address from = recover(hashedTx, _signature);
         require(from != address(0));
         require(_nonce == nonces[from]);
+        require(_value.add(_fee) <= balances[from]);
 
         balances[from] = balances[from].sub(_value).sub(_fee);
         balances[_to] = balances[_to].add(_value);
